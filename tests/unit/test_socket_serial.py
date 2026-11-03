@@ -2,6 +2,7 @@
 
 import sys
 import socket
+import subprocess
 import threading
 import unittest
 from pathlib import Path
@@ -14,6 +15,26 @@ from utils.serial_manager import SerialManager
 
 
 class SocketSerialTests(unittest.TestCase):
+    def test_socket_address_codec_is_initialized_before_timed_open(self):
+        script = (
+            "import builtins, codecs, sys\n"
+            "assert 'encodings.idna' not in sys.modules\n"
+            "import utils.serial_manager\n"
+            "assert 'encodings.idna' in sys.modules\n"
+            "original_import = builtins.__import__\n"
+            "def no_codec_import(name, *args, **kwargs):\n"
+            "    assert name != 'encodings.idna', 'codec loaded during lookup'\n"
+            "    return original_import(name, *args, **kwargs)\n"
+            "builtins.__import__ = no_codec_import\n"
+            "assert codecs.lookup('idna').name == 'idna'\n"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=Path(__file__).resolve().parents[2] / "src",
+            capture_output=True, text=True, timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_relay_drains_after_source_eof(self):
         with SocketRelay() as relay:
             addresses = [("127.0.0.1", int(endpoint.rsplit(":", 1)[1]))

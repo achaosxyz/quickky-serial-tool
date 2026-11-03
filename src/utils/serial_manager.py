@@ -1,5 +1,7 @@
 """Serial port ownership and bounded operations."""
 
+import codecs
+import encodings.idna  # Include the socket address codec in packaged builds.
 import threading
 import time
 from dataclasses import dataclass
@@ -8,6 +10,10 @@ import serial
 import serial.tools.list_ports
 import serial.urlhandler.protocol_socket  # Load before timed opens and include in packaged builds.
 from PySide6.QtCore import QCoreApplication
+
+# Keep first-use codec loading outside the bounded socket-open operation.
+codecs.lookup("idna")
+
 
 @dataclass(frozen=True)
 class SerialOperationResult:

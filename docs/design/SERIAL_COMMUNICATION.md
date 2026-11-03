@@ -34,7 +34,7 @@ The UI derives controls from explicit disconnected, opening, open, closing, and 
 
 Each receive loop holds its own port object, stop event, and generation. Before delivering bytes, it verifies that the generation and port still identify the active session. Data read after invalidation is discarded rather than delivered to a new session.
 
-The loop sleeps briefly when no bytes are pending. Physical COM sessions use periodic port enumeration and pyserial status properties for health checks. `socket://` sessions use nonblocking bounded reads when the socket is readable, rather than treating its `in_waiting` value as a byte count; EOF and read errors drive the normal disconnect path. Socket sessions do not enumerate COM ports or inspect modem control lines. pyserial ignores hardware settings for these sockets. The socket URL handler is loaded before timed opens and included in packaged builds. A failed current-session check or read closes that port and emits the disconnect callback.
+The loop sleeps briefly when no bytes are pending. Physical COM sessions use periodic port enumeration and pyserial status properties for health checks. `socket://` sessions use nonblocking bounded reads when the socket is readable, rather than treating its `in_waiting` value as a byte count; EOF and read errors drive the normal disconnect path. Socket sessions do not enumerate COM ports or inspect modem control lines. pyserial ignores hardware settings for these sockets. The socket URL handler and IDNA address codec are loaded before timed opens and included in packaged builds, avoiding first-use import latency inside the operation deadline. A failed current-session check or read closes that port and emits the disconnect callback.
 
 ## 5. Bounded Display Buffer
 

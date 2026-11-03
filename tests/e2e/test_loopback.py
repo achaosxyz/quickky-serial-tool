@@ -1,6 +1,5 @@
 """QTest coverage of the real application over a local TCP relay."""
 
-import faulthandler
 import os
 import sys
 import tempfile
@@ -23,7 +22,6 @@ from PySide6.QtWidgets import QApplication, QTabBar
 from components.work_tab_qt import ConnectionState
 from pages.main_window_qt import MainWindow
 from tests.e2e.socket_relay import SocketRelay
-from utils.serial_manager import SerialManager
 
 
 class LoopbackTests(unittest.TestCase):
@@ -41,13 +39,6 @@ class LoopbackTests(unittest.TestCase):
         with SocketRelay() as relay, tempfile.TemporaryDirectory(prefix="qserial-e2e-") as directory, ExitStack() as stack:
             self.ports = relay.endpoints
             with patch("utils.config_manager.get_base_path", return_value=directory):
-                invalidate_open = SerialManager._invalidate_open
-
-                def report_open_timeout(manager, generation):
-                    faulthandler.dump_traceback(file=sys.stderr, all_threads=True)
-                    return invalidate_open(manager, generation)
-
-                stack.enter_context(patch.object(SerialManager, "_invalidate_open", report_open_timeout))
                 warning = stack.enter_context(patch("pages.main_window_qt.QMessageBox.warning"))
                 window = MainWindow(port_provider=lambda: self.ports)
                 window.show()

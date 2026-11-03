@@ -137,7 +137,11 @@ class MainWindow(QMainWindow):
     def apply_theme(self):
         name = self.config_manager.get_theme()
         self.theme_manager.load_theme(name)
-        QApplication.instance().setPalette(self.theme_manager.palette())
+        app = QApplication.instance()
+        palette = self.theme_manager.palette()
+        scheme = Qt.ColorScheme.Dark if palette.window().color().lightness() < 128 else Qt.ColorScheme.Light
+        app.styleHints().setColorScheme(scheme)
+        app.setPalette(palette)
         self.setStyleSheet(self.theme_manager.stylesheet())
         self.work_panel.apply_theme()
         for action in self.theme_actions:

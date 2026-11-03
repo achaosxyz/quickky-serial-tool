@@ -77,6 +77,8 @@ The panels persist their own configuration sections through `ConfigManager`; `Wo
 
 `ThemeManagerQt` loads `themes/light.json` or `themes/dark.json`, exposes its current theme and colors, builds a `QPalette`, and generates the widget stylesheet. Theme actions retain their configuration key in `QAction.data()`. `MainWindow` applies application-wide styling, while `WorkColumn` and `WorkTab` update active-column borders, editor fonts, and existing receive-message colors.
 
+On startup and theme changes, `MainWindow` requests the matching Qt application color scheme before installing the custom palette. Qt synchronizes native Windows title bars, including existing dialogs, with the selected light or dark theme rather than leaving them on the system preference. Window decorations remain native.
+
 The `serialTabBar` stylesheet scope keeps Qt's native tab-close subcontrol transparent in normal, hover, and pressed states. Serial tabs keep a 20-DIP minimum content height so enabling or disabling close controls does not shift the workspace. Qt-managed close buttons keep a 20-DIP click target within their tab around a compact 8-DIP glyph and use theme-appropriate PNG glyphs from `themes/icons/`, including `@2x` assets for high-DPI displays. Qt still owns button painting, layout, and interaction; no custom paint event or SVG runtime plugin is needed. Tab scroll buttons and command-panel tabs are outside this scope. Theme assets are bundled with the existing `themes/` resource directory.
 
 ## 8. Language

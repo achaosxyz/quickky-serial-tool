@@ -50,7 +50,7 @@ class PackageSmokeTests(unittest.TestCase):
             self.assertFalse(report_path.exists())
             self.assertNotEqual(Path(kwargs["cwd"]), Path.cwd())
             self.assertEqual(Path(command[0]).parent, Path(kwargs["cwd"]))
-            self.assertEqual(command[1:], ["--smoke-test", str(self.output)])
+            self.assertEqual(command[1:], ["--smoke-test", str(self.output.resolve())])
             self.assertEqual(kwargs["env"]["QT_QPA_PLATFORM"], "offscreen")
             self.assertNotIn("QT_PLUGIN_PATH", kwargs["env"])
             report_path.write_text(json.dumps({"success": True, "version": "3.0.0",

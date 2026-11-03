@@ -78,6 +78,9 @@ class ThemeManagerQt:
         active = colors.get("active_border", selected)
         link = colors.get("link_color", selected)
         is_dark = QColor(bg).lightness() < 128
+        close_icon = Path(resource_path(
+            f"themes/icons/tab-close-{'dark' if is_dark else 'light'}.png"
+        )).as_posix()
         input_border = QColor(border).lighter(160) if is_dark else QColor(border).darker(135)
         disabled_bg = QColor(button_bg).darker(120) if is_dark else QColor(button_bg).darker(105)
         disabled_fg = QColor("#8A8A8A") if is_dark else QColor("#7A7A7A")
@@ -102,6 +105,13 @@ class ThemeManagerQt:
             QPushButton[linkButton="true"]:hover {{ color: {active}; text-decoration: underline; }}
             QTabBar::tab {{ background: {colors.get('inactive_tab', bg)}; padding: 7px 10px; border: 1px solid {border}; }}
             QTabBar::tab:selected {{ background: {colors.get('active_tab', text_bg)}; border-top: 2px solid {active}; }}
+            QTabBar#serialTabBar::tab {{ min-height: 20px; }}
+            QTabBar#serialTabBar::tab:selected {{ border-top: 1px solid {border}; }}
+            QTabBar#serialTabBar::close-button {{
+                image: url("{close_icon}");
+                subcontrol-position: center right; width: 20px; height: 20px;
+                background: transparent; border: none;
+            }}
             QMenu {{ background: {text_bg}; color: {text_fg}; border: 1px solid {border}; padding: 3px; }}
             QMenu::item {{ background: transparent; color: {text_fg}; padding: 6px 24px 6px 10px; }}
             QMenu::item:selected {{ background: {selected}; color: {selected_fg}; }}

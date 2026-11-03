@@ -22,6 +22,7 @@ from components.work_panel_qt import WorkPanel
 from components.command_panel_qt import CommandPanel
 from components.receive_settings_panel_qt import ReceiveSettingsPanel
 from components.send_settings_panel_qt import SendSettingsPanel
+from components.send_history_panel_qt import SendHistoryPanel
 from components.serial_settings_panel_qt import SerialSettingsPanel
 from components.quick_command_dialog_qt import QuickCommandDialog
 from pages.settings_dialog_qt import SettingsDialog
@@ -48,6 +49,63 @@ class WorkPanelAndCommandTests(unittest.TestCase):
             self.assertEqual(spy.at(0), ["hello", "TEXT"])
             self.assertEqual(config.get_send_history(), [])
             panel.deleteLater()
+
+    def test_history_columns_fit_without_horizontal_scrolling(self):
+        history = [{"data": "444123" * 20, "mode": "TEXT", "time": "2026-11-03 12:00:00"}
+                   for _ in range(80)]
+        config = Mock(get_send_history=Mock(return_value=history[:3]))
+        panel = SendHistoryPanel(config)
+        self.addCleanup(panel.deleteLater)
+        panel.show()
+
+        for count in (3, 80, 3):
+            config.get_send_history.return_value = history[:count]
+            panel.refresh()
+            previous_data_width = 0
+            for width in (220, 250, 360):
+                with self.subTest(count=count, width=width):
+                    panel.resize(width, 180)
+                    self.app.processEvents()
+                    self.app.processEvents()
+                    table = panel.table
+                    self.assertEqual(table.horizontalScrollBarPolicy(), Qt.ScrollBarAlwaysOff)
+                    self.assertFalse(table.horizontalScrollBar().isVisible())
+                    self.assertEqual(table.horizontalScrollBar().maximum(), 0)
+                    self.assertLessEqual(table.horizontalHeader().length(), table.viewport().width())
+                    self.assertGreater(table.columnWidth(1), previous_data_width)
+                    self.assertEqual(table.verticalScrollBar().isVisible(), count == 80)
+                    previous_data_width = table.columnWidth(1)
+
+    def test_history_preview_keeps_full_single_line_text_for_tail_elision(self):
+        payload = "444123" * 20 + "\r\nsecond line\rthird line\nfourth line"
+        history = [{"data": payload, "mode": "TEXT", "time": "2026-11-03 12:00:00"}]
+        config = Mock(get_send_history=Mock(return_value=history))
+        panel = SendHistoryPanel(config)
+        self.addCleanup(panel.deleteLater)
+
+        self.assertFalse(panel.table.wordWrap())
+        self.assertEqual(panel.table.textElideMode(), Qt.ElideRight)
+        expected = "[T] " + payload.replace("\r", "\\r").replace("\n", "\\n")
+        self.assertEqual(panel.table.item(0, 1).text(), expected)
+        self.assertEqual(history[0]["data"], payload)
+        self.assertGreater(len(panel.table.item(0, 1).text()), 50)
+
+    def test_history_preview_preserves_original_text_and_hex_for_resending(self):
+        text = "444123" * 20 + "\r\nnext line"
+        hex_data = "AA BB " * 20
+        history = [{"data": text, "mode": "TEXT", "time": ""},
+                   {"data": hex_data, "mode": "HEX", "time": ""}, "legacy\r\ntext"]
+        panel = SendHistoryPanel(Mock(get_send_history=Mock(return_value=history)))
+        self.addCleanup(panel.deleteLater)
+        spy = QSignalSpy(panel.send_requested)
+
+        self.assertEqual(panel.table.item(1, 1).text(), "[H] " + hex_data)
+        self.assertEqual(panel.table.item(2, 1).text(), "[T] legacy\\r\\ntext")
+        for row, expected in enumerate(((text, "TEXT"), (hex_data, "HEX"), ("legacy\r\ntext", "TEXT"))):
+            panel.table.selectRow(row)
+            panel._send_selected()
+            self.assertEqual(spy.at(row), list(expected))
+        self.assertEqual(spy.count(), 3)
 
     def test_radio_change_saves_once_and_loading_saves_nothing(self):
         config = Mock()

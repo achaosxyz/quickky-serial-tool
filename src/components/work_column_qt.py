@@ -1,7 +1,7 @@
 """Tabbed workspace column."""
 
-from PySide6.QtCore import QEvent, Qt
-from PySide6.QtWidgets import QFrame, QMenu, QMessageBox, QStyle, QTabBar, QTabWidget, QToolButton, QVBoxLayout, QWidget
+from PySide6.QtCore import QEvent, QSize, Qt
+from PySide6.QtWidgets import QFrame, QMenu, QMessageBox, QTabBar, QTabWidget, QVBoxLayout, QWidget
 
 from .work_tab_qt import WorkTab
 
@@ -11,7 +11,9 @@ class WorkColumn(QWidget):
         super().__init__(parent)
         self.config_manager, self.theme_manager, self.panel_type, self.on_column_activated, self.on_tab_data_sent, self.is_active = config_manager, theme_manager, panel_type, on_column_activated, on_tab_data_sent, False
         self.notebook = QTabWidget()
+        self.notebook.tabBar().setObjectName("serialTabBar")
         self.notebook.setTabsClosable(False)
+        self.notebook.tabCloseRequested.connect(self._close_tab)
         self.notebook.currentChanged.connect(self._on_changed)
         self.notebook.tabBar().tabBarClicked.connect(self._on_tab_bar_clicked)
         self.notebook.tabBar().tabBarDoubleClicked.connect(self._close_tab_on_double_click)
@@ -19,15 +21,15 @@ class WorkColumn(QWidget):
         self.notebook.tabBar().customContextMenuRequested.connect(self._tab_menu)
         self._add_tab_page = QWidget(self.notebook)
         self.notebook.blockSignals(True)
-        self._add_tab_index = self.notebook.addTab(self._add_tab_page, "+")
+        self.notebook.addTab(self._add_tab_page, "+")
         self.notebook.blockSignals(False)
-        for side in (QTabBar.LeftSide, QTabBar.RightSide): self.notebook.tabBar().setTabButton(self._add_tab_index, side, None)
         self.top_border = QFrame()
-        self.top_border.setFixedHeight(3)
+        self.top_border.setFixedHeight(2)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.addWidget(self.top_border)
+        layout.addSpacing(4)
         layout.addWidget(self.notebook)
         self.set_active(False)
         self._add_new_tab(True)
@@ -50,17 +52,24 @@ class WorkColumn(QWidget):
     def _is_add_tab(self, index): return self.notebook.widget(index) is self._add_tab_page
     def _refresh_close_buttons(self):
         can_close = len(self.get_all_tabs()) > 1
-        for index, tab in enumerate(self.get_all_tabs()):
-            button = self.notebook.tabBar().tabButton(self.notebook.indexOf(tab), QTabBar.RightSide)
-            if not isinstance(button, QToolButton):
-                button = QToolButton(self.notebook.tabBar())
-                button.setAutoRaise(True)
-                button.setToolTip(self.tr("Close tab"))
-                button.setIcon(self.style().standardIcon(QStyle.SP_TitleBarCloseButton))
-                button.setFixedSize(18, 18)
-                button.clicked.connect(lambda _checked=False, target=tab: self._close_tab(self.notebook.indexOf(target)))
-                self.notebook.tabBar().setTabButton(self.notebook.indexOf(tab), QTabBar.RightSide, button)
-            button.setVisible(can_close)
+        self.notebook.setTabsClosable(can_close)
+        bar = self.notebook.tabBar()
+        for side in (QTabBar.LeftSide, QTabBar.RightSide):
+            button = bar.tabButton(self.notebook.indexOf(self._add_tab_page), side)
+            if button is not None:
+                bar.setTabButton(self.notebook.indexOf(self._add_tab_page), side, None)
+                button.deleteLater()
+        for tab in self.get_all_tabs():
+            index = self.notebook.indexOf(tab)
+            for side in (QTabBar.LeftSide, QTabBar.RightSide):
+                button = bar.tabButton(index, side)
+                if button is not None:
+                    if button.size() != QSize(20, 20):
+                        button.setFixedSize(20, 20)
+                        # Re-registering refreshes cached geometry but hides the same button.
+                        bar.setTabButton(index, side, button)
+                        button.show()
+                    button.setToolTip(self.tr("Close tab"))
     def _watch_activation(self, widget):
         widget.installEventFilter(self)
         for child in widget.findChildren(QWidget): child.installEventFilter(self)
@@ -118,9 +127,10 @@ class WorkColumn(QWidget):
         for tab in self.get_all_tabs():
             if not tab.serial_settings.get_current_port():
                 self.notebook.setTabText(self.notebook.indexOf(tab), self.tr("New tab"))
-            button = self.notebook.tabBar().tabButton(self.notebook.indexOf(tab), QTabBar.RightSide)
-            if button:
-                button.setToolTip(self.tr("Close tab"))
+            for side in (QTabBar.LeftSide, QTabBar.RightSide):
+                button = self.notebook.tabBar().tabButton(self.notebook.indexOf(tab), side)
+                if button is not None:
+                    button.setToolTip(self.tr("Close tab"))
 
     def changeEvent(self, event):
         super().changeEvent(event)

@@ -4,7 +4,7 @@ from datetime import datetime
 
 from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtGui import QFont
-from PySide6.QtWidgets import QMenu, QMessageBox, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHeaderView, QMenu, QMessageBox, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 
 
 class SendHistoryPanel(QWidget):
@@ -19,9 +19,13 @@ class SendHistoryPanel(QWidget):
         self.table.horizontalHeader().setFont(compact_font)
         self.table.verticalHeader().setDefaultSectionSize(22)
         self.table.setHorizontalHeaderLabels([self.tr("Time"), self.tr("Data")])
-        self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.table.setWordWrap(False)
+        self.table.setTextElideMode(Qt.ElideRight)
         self.table.itemDoubleClicked.connect(lambda _item: self._send_selected())
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self._menu)
@@ -39,8 +43,8 @@ class SendHistoryPanel(QWidget):
             time = item.get("time", "")
             try: time = datetime.strptime(time, "%Y-%m-%d %H:%M:%S").strftime("%m-%d %H:%M:%S")
             except ValueError: pass
-            data = str(item.get("data", "")).replace("\n", "\\n")
-            data = ("[H] " if item.get("mode") == "HEX" else "[T] ") + (data[:50] + ("..." if len(data) > 50 else ""))
+            data = str(item.get("data", "")).replace("\r", "\\r").replace("\n", "\\n")
+            data = ("[H] " if item.get("mode") == "HEX" else "[T] ") + data
             self.table.setItem(row, 0, QTableWidgetItem(time))
             self.table.setItem(row, 1, QTableWidgetItem(data))
     def _menu(self, pos):

@@ -31,6 +31,9 @@ WorkPanel
 - `WorkColumn` creates, selects, closes, and enumerates tabs and propagates theme, suspension, and cleanup.
 - `WorkTab` emits port changes; its owning `WorkColumn` updates the tab title without the tab traversing its parent widgets.
 - The final real tab in a column cannot be closed; the dedicated plus page creates another tab.
+- Serial tabs use Qt-managed close buttons and `tabCloseRequested`; close controls are enabled only with multiple real tabs, and the plus page never has one. Native buttons are re-registered and explicitly shown after their hit-target size changes so dynamically inserted tabs immediately use the updated geometry without hiding their close controls. Close tooltips follow the application language.
+- Each column reserves a 2-DIP activation strip followed by a 4-DIP gap above its tabs. Only the active column is highlighted in dual-column mode; the reserved space remains unchanged in single-column mode and when activation switches.
+- Serial-tab selection uses the theme's selected background and a neutral top border, independently of the column activation strip. Other tab bars retain their selected-tab accent.
 - Switching to single-column mode hides and suspends the secondary column without destroying its tabs or per-port configuration.
 - The active column determines the target of quick-command and history sending.
 
@@ -62,12 +65,15 @@ The panels persist their own configuration sections through `ConfigManager`; `Wo
 
 - Quick commands support named groups, group reordering, command editing, drag reordering, and TEXT/HEX sending.
 - Send history displays newest successful sends first and supports resending or clearing history.
+- History previews are single-line TEXT/HEX labels with visible `\r` and `\n` escapes. Qt elides only the trailing overflow to fit the current column width; previews are not pre-truncated to a fixed character count. The time column fits its contents and the data column stretches into the remaining viewport width. Horizontal scrolling is disabled; vertical scrolling remains available for long histories. Resending uses the complete original payload, not its displayed preview.
 - Both child panels emit a send request through `CommandPanel.send_requested`; `MainWindow` connects it to `WorkPanel`. Successful tab sends notify `MainWindow` to refresh history once.
 - External sends replace the tab's send draft with the selected command or history payload and record history by default only after success.
 
 ## 7. Themes
 
 `ThemeManagerQt` loads `themes/light.json` or `themes/dark.json`, exposes its current theme and colors, builds a `QPalette`, and generates the widget stylesheet. Theme actions retain their configuration key in `QAction.data()`. `MainWindow` applies application-wide styling, while `WorkColumn` and `WorkTab` update active-column borders, editor fonts, and existing receive-message colors.
+
+The `serialTabBar` stylesheet scope keeps Qt's native tab-close subcontrol transparent in normal, hover, and pressed states. Serial tabs keep a 20-DIP minimum content height so enabling or disabling close controls does not shift the workspace. Qt-managed close buttons keep a 20-DIP click target within their tab around a compact 8-DIP glyph and use theme-appropriate PNG glyphs from `themes/icons/`, including `@2x` assets for high-DPI displays. Qt still owns button painting, layout, and interaction; no custom paint event or SVG runtime plugin is needed. Tab scroll buttons and command-panel tabs are outside this scope. Theme assets are bundled with the existing `themes/` resource directory.
 
 ## 8. Language
 

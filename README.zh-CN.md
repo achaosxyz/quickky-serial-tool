@@ -53,6 +53,8 @@ python3 scripts/generate_translations.py
 python3 src/main/app_qt.py
 ```
 
+自动化单元、组件及 GUI 端到端测试使用测试进程创建的本机 TCP 串口端点，无需虚拟 COM 驱动或 `dev.env`。运行方法与限制见 [E2E 测试指南](docs/guides/E2E_TESTING.md)。
+
 ## 建立第一个串口连接
 
 1. 连接串口设备，并在 Windows 中确认其 COM 端口。

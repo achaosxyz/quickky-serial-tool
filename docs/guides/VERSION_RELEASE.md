@@ -46,13 +46,13 @@ The saved file contains exactly `version`, `source`, and `notes`. User confirmat
 
 1. Dispatch `.github/workflows/release.yml` from `main` with the confirmed `version`, full `source` SHA, and `notes`. The Actions UI and authenticated `gh workflow run release.yml --ref main` are implementation options, not additional user-facing SOPs.
 2. A read-only Windows job checks out the confirmed source and requires it still to be current `origin/develop`, containing `origin/main`, with a clean tree, matching version, and unused tag. It creates a local release-version commit without changing the remote.
-3. Run unit/component tests, `build.bat`, and the packaged ZIP smoke test on Python 3.11 x64, `windows-2022`. The extracted EXE must initialize English and Chinese, capture windows, clean up, exit 0, and write a fresh report with the expected version. No serial port is opened.
+3. Run unit/component tests, localhost TCP serial GUI E2E, `build.bat`, and the packaged ZIP smoke test on Python 3.11 x64, `windows-2022`. The extracted EXE must initialize English and Chinese, capture windows, clean up, exit 0, and write a fresh report with the expected version. The package smoke test does not open a serial port.
 4. Transfer the tested commit in a Git bundle together with the exact ZIP, notes, and metadata. The publishing job runs orchestration from the original `main` checkout; it does not execute candidate code or rebuild the package.
 5. Recheck remote state, then atomically fast-forward `main` and push annotated `v<version>`. Never force-push or move an existing version tag.
 6. Create or resume a draft GitHub Release, upload the tested ZIP, and publish it with the confirmed title, notes, and stable/RC type. RCs are prereleases, not latest; stable releases are marked latest. Verify that public information matches the confirmation and that the expected ZIP exists before advancing development.
 7. Fast-forward `develop` through the release commit. A stable release adds `chore: start <next-patch> development` with the next `-snapshot`; an RC does not increment the patch.
 
-Only the publishing job has `contents: write`. One non-canceling release concurrency group serializes publication. Tag pushes are not used to trigger a second workflow. Ordinary pushes run `.github/workflows/ci.yml` tests and isolated source startup smoke; local builds and version edits never publish.
+Only the publishing job has `contents: write`. One non-canceling release concurrency group serializes publication. Tag pushes are not used to trigger a second workflow. Ordinary pushes run `.github/workflows/ci.yml` unit/component and TCP GUI E2E tests and isolated source startup smoke; local builds and version edits never publish.
 
 Release lookup resolves both drafts and public releases through GraphQL, then reads their REST metadata by release ID; the REST tag endpoint only resolves published releases. API/authentication errors stop the operation rather than being treated as a missing release.
 

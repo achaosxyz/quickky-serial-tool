@@ -84,7 +84,7 @@ The module designs define the detailed behavior without duplicating it in this o
 - `build.bat` generates the application translation and packages it with Qt's translation catalog, the Qt entry point, version, icon, themes, and Windows/offscreen platform plugins.
 - Release ZIP files contain the executable and required license materials, never the development `config.json`.
 - `scripts/release.py` records confirmed version/source/notes, prepares a local release commit, transfers the tested commit and ZIP between read-only verification and write-enabled publication, and advances `develop` only after GitHub publication; the two user-facing operations are defined in the [release SOP](../guides/VERSION_RELEASE.md).
-- Windows Actions run unit/component tests and isolated startup smoke; releases additionally smoke-test the extracted ZIP executable before changing `main` or its tag.
+- Windows Actions run unit/component tests, localhost TCP serial GUI E2E, and isolated startup smoke; releases additionally smoke-test the extracted ZIP executable before changing `main` or its tag.
 
 ## 8. Maintenance Contract
 

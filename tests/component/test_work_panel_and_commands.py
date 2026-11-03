@@ -36,6 +36,22 @@ class WorkPanelAndCommandTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
+    def test_silent_port_restore_from_empty_list_preserves_signal_blocking(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = ConfigManager(str(Path(directory) / "config.json"))
+            callback = Mock()
+            panel = SerialSettingsPanel(config, callback, port_provider=lambda: [])
+            self.addCleanup(panel.deleteLater)
+            port = "socket://127.0.0.1:12345"
+            panel.set_current_port(port, notify=False)
+            callback.assert_not_called()
+            self.assertEqual(panel.get_current_port(), port)
+            self.assertFalse(panel.port_combo.signalsBlocked())
+            panel.port_combo.blockSignals(True)
+            panel.set_current_port("socket://127.0.0.1:12346", notify=False)
+            callback.assert_not_called()
+            self.assertTrue(panel.port_combo.signalsBlocked())
+
     def test_send_requests_do_not_mutate_history_or_refresh_it(self):
         with tempfile.TemporaryDirectory() as directory:
             config = ConfigManager(str(Path(directory) / "config.json"))

@@ -1,4 +1,4 @@
-"""Measure native GUI responsiveness over the configured serial loopback pair."""
+"""Measure native GUI responsiveness over a local TCP relay."""
 
 import argparse
 import json
@@ -31,7 +31,7 @@ def produce(port, payload, rate, ready, start, stop, results):
     sent = 0
     started = None
     try:
-        with serial.Serial(port, 115200, timeout=0, write_timeout=2) as endpoint:
+        with serial.serial_for_url(port, 115200, timeout=0, write_timeout=2) as endpoint:
             ready.set()
             if not start.wait(10):
                 raise RuntimeError("GUI did not start the producer")
@@ -56,23 +56,21 @@ def distribution(values):
 
 
 def measure(args):
+    from tests.e2e.socket_relay import SocketRelay
+
+    with SocketRelay() as relay:
+        return measure_with_relay(args, relay)
+
+
+def measure_with_relay(args, relay):
     os.environ.setdefault("QT_QPA_PLATFORM", "windows")
-    import serial
     from PySide6 import __version__ as qt_version
     from PySide6.QtCore import QPoint, QTimer, Qt
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication
     from components.work_tab_qt import ConnectionState
     from pages.main_window_qt import MainWindow
-    from tests.e2e.environment import ensure_ports_available, load_endpoints
-
-    endpoints = load_endpoints()
-    ensure_ports_available(endpoints)
-    if endpoints[0].casefold() == endpoints[1].casefold():
-        raise RuntimeError("E2E endpoints must be distinct")
-    for port in endpoints:
-        with serial.Serial(port, timeout=0):
-            pass
+    endpoints = relay.endpoints
     app = QApplication.instance() or QApplication([])
     payload = payload_for(args.scenario, round(args.kbps * 1000 / 8 * args.seconds))
     context = multiprocessing.get_context("spawn")
@@ -86,7 +84,7 @@ def measure(args):
               "version": (ROOT / "VERSION").read_text().strip()}
     with tempfile.TemporaryDirectory(prefix="qserial-perf-") as directory:
         with patch("utils.config_manager.get_base_path", return_value=directory):
-            window = MainWindow()
+            window = MainWindow(port_provider=lambda: endpoints)
             window.resize(1200, 720)
             window.move(app.primaryScreen().availableGeometry().topLeft() + QPoint(20, 20))
             window.show()
@@ -193,7 +191,8 @@ def measure(args):
             def check():
                 now = time.perf_counter()
                 if state["began"] is None:
-                    if ready.is_set() and tab.connection_state == ConnectionState.OPEN:
+                    if (ready.is_set() and tab.connection_state == ConnectionState.OPEN
+                            and all(event.is_set() for event in relay.connected)):
                         if state["prepared"] is None:
                             if args.save_log:
                                 with patch("components.work_tab_qt.QFileDialog.getSaveFileName",
@@ -321,9 +320,11 @@ def measure(args):
             if args.save_log:
                 report["log_exact"] = log_path.is_file() and log_path.read_text(encoding="utf-8") == "".join(log_parts)
                 report["pass"] = report["pass"] and report["log_exact"]
-    for port in endpoints:
-        with serial.Serial(port, timeout=0):
-            pass
+    deadline = time.monotonic() + 2
+    while any(event.is_set() for event in relay.connected) and time.monotonic() < deadline:
+        time.sleep(0.01)
+    if any(event.is_set() for event in relay.connected):
+        raise RuntimeError("Serial endpoints were not released")
     (args.output / f"{args.scenario}.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report), flush=True)
     if not report["pass"]:

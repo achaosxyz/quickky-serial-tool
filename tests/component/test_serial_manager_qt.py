@@ -2,14 +2,20 @@
 
 import sys
 import threading
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+import serial
+from PySide6.QtTest import QSignalSpy, QTest
+from PySide6.QtWidgets import QApplication
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from utils.serial_manager import SerialOperationResult
 from utils.serial_manager_qt import SerialManagerQt
+from tests.e2e.socket_relay import SocketRelay
 
 
 class FakeManager:
@@ -40,6 +46,35 @@ class FakeManager:
 
 
 class SerialManagerQtTests(unittest.TestCase):
+    def test_socket_operations_and_receive_queue(self):
+        app = QApplication.instance() or QApplication([])
+        with SocketRelay() as relay:
+            adapter = SerialManagerQt()
+            self.addCleanup(lambda: (adapter.dispose(), adapter.wait_disposed(3)))
+            completed = QSignalSpy(adapter.operation_completed)
+            with serial.serial_for_url(relay.endpoints[1], timeout=2) as peer:
+                self.assertTrue(adapter.open_async(port=relay.endpoints[0]))
+                deadline = time.monotonic() + 5
+                while (completed.count() < 1 or not all(event.is_set() for event in relay.connected)) and time.monotonic() < deadline:
+                    QTest.qWait(10)
+                self.assertEqual(completed.count(), 1)
+                self.assertEqual(completed.at(0)[0], "open")
+                self.assertTrue(completed.at(0)[1].success)
+                peer.write(b"component input")
+                data = bytearray()
+                deadline = time.monotonic() + 5
+                while len(data) < 15 and time.monotonic() < deadline:
+                    QTest.qWait(10)
+                    chunk, dropped = adapter.drain()
+                    self.assertEqual(dropped, 0)
+                    data.extend(chunk)
+                self.assertEqual(data, b"component input")
+                self.assertTrue(adapter.send_async(b"component output"))
+                self.assertEqual(peer.read(16), b"component output")
+                adapter.dispose()
+                self.assertTrue(adapter.wait_disposed(3).success)
+        self.assertIsNotNone(app)
+
     def test_dispose_drains_fifo_and_reuses_queued_close(self):
         manager = FakeManager()
         with patch("utils.serial_manager_qt.SerialManager", return_value=manager):

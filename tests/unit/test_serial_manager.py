@@ -36,13 +36,13 @@ class SerialManagerTests(unittest.TestCase):
         manager._receive_loop = lambda *_args: None
         created_ports = []
 
-        def create_port(**_settings):
+        def create_port(*_args, **_settings):
             time.sleep(1.05)
             port = self._SlowPort()
             created_ports.append(port)
             return port
 
-        with patch("utils.serial_manager.serial.Serial", side_effect=create_port):
+        with patch("utils.serial_manager.serial.serial_for_url", side_effect=create_port):
             started = time.monotonic()
             with redirect_stdout(io.StringIO()):
                 self.assertFalse(manager.open("COM1"))
@@ -56,12 +56,12 @@ class SerialManagerTests(unittest.TestCase):
         manager._receive_loop = lambda *_args: None
         open_calls = []
 
-        def create_port(**_settings):
+        def create_port(*_args, **_settings):
             open_calls.append(time.monotonic())
             time.sleep(1.2)
             return self._SlowPort()
 
-        with patch("utils.serial_manager.serial.Serial", side_effect=create_port):
+        with patch("utils.serial_manager.serial.serial_for_url", side_effect=create_port):
             with redirect_stdout(io.StringIO()):
                 self.assertFalse(manager.open("COM1"))
                 self.assertFalse(manager.open("COM1"))

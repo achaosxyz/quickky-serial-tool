@@ -20,9 +20,10 @@ class PortComboBox(QComboBox):
 class SerialSettingsPanel(QGroupBox):
     BAUDRATES = ["300", "600", "1200", "2400", "4800", "9600", "14400", "19200", "38400", "57600", "115200", "230400", "460800", "921600", "1000000", "1500000", "2000000"]
 
-    def __init__(self, config_manager, on_change_callback=None, panel_type="main", parent=None):
+    def __init__(self, config_manager, on_change_callback=None, panel_type="main", parent=None, port_provider=None):
         super().__init__(parent)
         self.config_manager, self.on_change_callback, self.panel_type = config_manager, on_change_callback, panel_type
+        self.port_provider = port_provider or SerialManager.get_available_ports
         self.port_combo = PortComboBox(self.refresh_ports)
         self.port_combo.setEditable(False)
         self.baudrate_combo = self._combo(self.BAUDRATES, "115200", editable=True)
@@ -65,7 +66,7 @@ class SerialSettingsPanel(QGroupBox):
                 except ValueError:
                     pass
             return (1, value)
-        ports = sorted(SerialManager.get_available_ports(), key=port_sort_key)
+        ports = sorted(self.port_provider(), key=port_sort_key)
         self.port_combo.blockSignals(True)
         self.port_combo.clear()
         self.port_combo.addItems(ports)
@@ -125,12 +126,15 @@ class SerialSettingsPanel(QGroupBox):
             for combo in combos: combo.blockSignals(False)
 
     def get_current_port(self): return self.port_combo.currentText()
-    def set_current_port(self, port):
-        if self.port_combo.findText(port) < 0: self.port_combo.addItem(port)
-        self.port_combo.blockSignals(True)
-        self.port_combo.setCurrentText(port)
-        self.port_combo.blockSignals(False)
-        self._on_port_changed(port)
+    def set_current_port(self, port, notify=True):
+        blocked = self.port_combo.blockSignals(True)
+        try:
+            if self.port_combo.findText(port) < 0: self.port_combo.addItem(port)
+            self.port_combo.setCurrentText(port)
+        finally:
+            self.port_combo.blockSignals(blocked)
+        if notify:
+            self._on_port_changed(port)
     def set_enabled(self, enabled): self.setEnabled(enabled)
 
     def retranslate_ui(self):

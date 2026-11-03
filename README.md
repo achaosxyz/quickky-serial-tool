@@ -53,6 +53,8 @@ python3 scripts/generate_translations.py
 python3 src/main/app_qt.py
 ```
 
+Automated unit, component, and GUI end-to-end tests use test-owned localhost TCP serial endpoints; no virtual COM driver or `dev.env` is required. See the [E2E testing guide](docs/guides/E2E_TESTING.md) for commands and limitations.
+
 ## First Serial Connection
 
 1. Connect the serial device and identify its COM port in Windows.

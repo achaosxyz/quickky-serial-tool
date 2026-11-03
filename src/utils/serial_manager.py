@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 import serial
 import serial.tools.list_ports
+import serial.urlhandler.protocol_socket  # Load before timed opens and include in packaged builds.
 from PySide6.QtCore import QCoreApplication
 
 @dataclass(frozen=True)
@@ -72,6 +73,8 @@ class SerialManager:
             if not port.is_open:
                 return False, "Serial port is not open"
             port_name = port.port
+            if port_name.lower().startswith("socket://"):
+                return True, None
             if not self._is_port_available(port_name):
                 return False, f"Serial port {port_name} was removed"
             try:
@@ -138,13 +141,13 @@ class SerialManager:
             opened_port = None
             try:
                 rtscts, xonxoff = FLOW_CONTROL_MAP.get(flow_control, (False, False))
-                opened_port = serial.Serial(
-                    port=port,
+                opened_port = serial.serial_for_url(
+                    port,
                     baudrate=baudrate,
                     bytesize=bytesize,
                     parity=PARITY_MAP.get(parity, serial.PARITY_NONE),
                     stopbits=STOPBITS_MAP.get(stopbits, serial.STOPBITS_ONE),
-                    timeout=0.1,
+                    timeout=0 if port.lower().startswith("socket://") else 0.1,
                     write_timeout=self.operation_timeout,
                     rtscts=rtscts,
                     xonxoff=xonxoff,
@@ -249,8 +252,10 @@ class SerialManager:
                         raise serial.SerialException(error_message)
                 if port.is_open:
                     try:
-                        if port.in_waiting:
-                            data = port.read(port.in_waiting)
+                        waiting = port.in_waiting
+                        if waiting:
+                            size = 65536 if port.port.lower().startswith("socket://") else waiting
+                            data = port.read(size)
                             with self._operation_lock:
                                 is_current = (
                                     not stop_event.is_set()

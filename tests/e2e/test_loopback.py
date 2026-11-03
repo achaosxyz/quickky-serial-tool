@@ -1,4 +1,4 @@
-"""QTest coverage of the real application over a configured serial pair."""
+"""QTest coverage of the real application over a local TCP relay."""
 
 import os
 import sys
@@ -21,37 +21,26 @@ from PySide6.QtWidgets import QApplication, QTabBar
 
 from components.work_tab_qt import ConnectionState
 from pages.main_window_qt import MainWindow
-from tests.e2e.environment import ensure_ports_available, load_endpoints
+from tests.e2e.socket_relay import SocketRelay
 
 
 class LoopbackTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        try:
-            cls.ports = load_endpoints()
-            ensure_ports_available(cls.ports)
-        except RuntimeError as error:
-            raise unittest.SkipTest(str(error)) from error
-        if cls.ports[0].casefold() == cls.ports[1].casefold():
-            raise AssertionError("E2E endpoints must be distinct")
-        try:
-            with serial.Serial(cls.ports[0], timeout=0), serial.Serial(cls.ports[1], timeout=0):
-                pass
-        except serial.SerialException as error:
-            raise unittest.SkipTest(f"E2E endpoint unavailable or occupied: {error}") from error
         cls.app = QApplication.instance() or QApplication([])
 
     def wait_for(self, predicate, message, timeout=5000):
         deadline = time.monotonic() + timeout / 1000
         while not predicate() and time.monotonic() < deadline:
             QTest.qWait(10)
-        self.assertTrue(predicate(), message)
+        self.assertTrue(predicate(), message() if callable(message) else message)
 
     def test_real_window_bidirectional_loopback_and_cleanup(self):
-        with tempfile.TemporaryDirectory(prefix="qserial-e2e-") as directory, ExitStack() as stack:
+        with SocketRelay() as relay, tempfile.TemporaryDirectory(prefix="qserial-e2e-") as directory, ExitStack() as stack:
+            self.ports = relay.endpoints
             with patch("utils.config_manager.get_base_path", return_value=directory):
                 warning = stack.enter_context(patch("pages.main_window_qt.QMessageBox.warning"))
-                window = MainWindow()
+                window = MainWindow(port_provider=lambda: self.ports)
                 window.show()
                 stack.callback(window.close)
                 self.assertEqual(Path(window.config_manager.config_file).parent, Path(directory))
@@ -62,10 +51,27 @@ class LoopbackTests(unittest.TestCase):
                 b = column.get_current_tab()
                 self.assertIsNot(a, b)
                 for tab, port in zip((a, b), self.ports):
+                    column.notebook.setCurrentWidget(tab)
+                    tab.serial_settings.refresh_ports()
+                    self.assertEqual(tab.serial_settings.port_combo.count(), 2)
                     tab.serial_settings.port_combo.setCurrentText(port)
+                    self.assertEqual(tab.serial_settings.get_current_port(), port)
                     QTest.mouseClick(tab.connect_btn, Qt.LeftButton)
+                    self.assertNotEqual(tab.connection_state, ConnectionState.DISCONNECTED,
+                                        tab.receive_text.toPlainText())
                     self.wait_for(lambda: tab.connection_state == ConnectionState.OPEN,
-                                  f"Could not open {port}: {tab.receive_text.toPlainText()}")
+                                  lambda: f"Could not open {port}: {tab.connection_state} {tab.receive_text.toPlainText()}")
+
+                if os.environ.get("QSERIAL_E2E_SCREENSHOT_DIR"):
+                    output = Path(os.environ["QSERIAL_E2E_SCREENSHOT_DIR"])
+                    output.mkdir(parents=True, exist_ok=True)
+                    for language in ("en_US", "zh_CN"):
+                        window.language_manager.apply_language(language)
+                        for theme in ("light", "dark"):
+                            window._change_theme(theme)
+                            QTest.qWait(100)
+                            self.assertTrue(window.grab().save(str(output / f"socket-{language}-{theme}.png")))
+                    window.language_manager.apply_language("en_US")
 
                 column.notebook.setCurrentWidget(a)
                 a.send_text.setPlainText("hello\n世界")
@@ -125,13 +131,17 @@ class LoopbackTests(unittest.TestCase):
                 QTest.mouseClick(close_button, Qt.LeftButton)
                 self.assertNotIn(b, column.get_all_tabs())
                 self.assertIn("LOG-CHECK", log_path.read_text(encoding="utf-8"))
-                with serial.Serial(self.ports[1], timeout=0):
-                    pass
+                self.wait_for(lambda: not relay.connected[1].is_set(), "Closed tab retained endpoint")
                 window.close()
                 warning.assert_not_called()
-                for port in self.ports:
-                    with serial.Serial(port, timeout=0):
-                        pass
+                self.wait_for(lambda: not any(event.is_set() for event in relay.connected),
+                              "Window retained endpoints")
+                with serial.serial_for_url(self.ports[0], timeout=2) as first, serial.serial_for_url(self.ports[1], timeout=2) as second:
+                    self.wait_for(lambda: all(event.is_set() for event in relay.connected), "Reopen failed")
+                    first.write(b"reopened A")
+                    self.assertEqual(second.read(10), b"reopened A")
+                    second.write(b"reopened B")
+                    self.assertEqual(first.read(10), b"reopened B")
 
 
 if __name__ == "__main__":

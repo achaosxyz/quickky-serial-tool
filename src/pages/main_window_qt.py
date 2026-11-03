@@ -18,7 +18,7 @@ from utils.theme_manager_qt import ThemeManagerQt
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, config_manager=None):
+    def __init__(self, config_manager=None, port_provider=None):
         super().__init__()
         QApplication.setStyle("Windows")
         self.setWindowTitle(AppInfo.get_window_title())
@@ -26,6 +26,7 @@ class MainWindow(QMainWindow):
         icon = Path(resource_path("icon.png"))
         if icon.exists(): self.setWindowIcon(QIcon(str(icon)))
         self.config_manager = ConfigManager() if config_manager is None else config_manager
+        self.port_provider = port_provider
         self.theme_manager = ThemeManagerQt()
         self.language_manager = LanguageManagerQt()
         self.language_manager.apply_language(self.config_manager.get_language())
@@ -42,7 +43,7 @@ class MainWindow(QMainWindow):
             self.tr("The existing configuration was preserved. Changes cannot be saved until you import a valid configuration."),
         )
     def _create_widgets(self):
-        self.work_panel = WorkPanel(self.config_manager, self.theme_manager, self._on_data_sent, self)
+        self.work_panel = WorkPanel(self.config_manager, self.theme_manager, self._on_data_sent, self, self.port_provider)
         self.command_panel = CommandPanel(self.config_manager, self)
         self.command_panel.send_requested.connect(self.work_panel.send_data)
         self.splitter = QSplitter()

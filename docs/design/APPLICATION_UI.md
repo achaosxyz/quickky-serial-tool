@@ -47,6 +47,8 @@ A `WorkTab` is the coordinator for one serial session. It owns:
 - Read-only receive editor, send editor, connection/send buttons, clear/reset actions, and RX/TX counters.
 - Connection and reconnect coordination, send preparation, history notification, log selection, and cleanup.
 
+Reconnect keeps the session endpoint independently of dropdown discovery. Restoring its displayed selection is silent: it must not reload per-port presets, replace an edited send draft, or clear newly queued receive bytes. Explicitly choosing another port while disconnected cancels the old session's retry and waits for a manual open; lifecycle details are defined in [Serial communication](SERIAL_COMMUNICATION.md#3-open-close-and-operation-results).
+
 The receive editor keeps horizontal scrolling and uses both a maximum display-block count and a 4 MiB character cap. TEXT and HEX share a 1,024 UTF-16-unit display-block limit: only pathological long lines are segmented, independently of serial read boundaries. Continuation blocks are marked so plain-text export and clipboard copying omit display-only breaks; natural newlines and formatted file logs remain unchanged. A display block may end slightly earlier to keep a nearby word/HEX byte token or surrogate pair intact. The configured receive line capacity counts display blocks, including continuations.
 
 Display appends use one edit transaction and an independent cursor, preserving the user's selection and horizontal position. Short inserts use the native Qt insertion path. Prefix trimming jumps directly by UTF-16 position and avoids retaining half a surrogate pair. Character formats are cached until the theme changes; system messages use distinct text colors and are separated from unfinished receive lines without exporting the whole document. Automatic vertical scrolling is deferred and coalesced, and disabled scrolling leaves the view at its current position. Undo history is disabled for the receive-only editor. Standard keyboard Copy and Qt's translated context-menu Copy route through logical-text export using native clipboard text ownership; export reads a selection once instead of positioning a cursor in every historical block.
@@ -56,6 +58,7 @@ Receive totals are accumulated on every drained batch. WorkTab coalesces the RX/
 ## 5. Settings Panels
 
 - `SerialSettingsPanel` enumerates ports, edits serial parameters, restores per-port configuration, and records the last selected port for its column.
+- `MainWindow` can inject a port-discovery callable through the workspace to every settings panel, including newly created tabs. Normal startup uses system COM enumeration; isolated tests inject their own socket endpoints and retain them on refresh.
 - Parity and flow-control labels are translated independently from their stable configuration and serial-driver values; switching languages does not save settings.
 - `ReceiveSettingsPanel` edits TEXT/HEX mode, encoding, timestamped log mode, file logging, automatic reconnect, and automatic scrolling.
 - `SendSettingsPanel` edits TEXT/HEX mode, CR/LF/CRLF selection, loop sending, and loop period.

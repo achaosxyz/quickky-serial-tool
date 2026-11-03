@@ -36,6 +36,8 @@ jobs:
         run: python -m unittest discover -s tests/unit -v
       - name: Qt component tests
         run: python -m unittest discover -s tests/component -v
+      - name: TCP serial GUI E2E
+        run: python -m unittest discover -s tests/e2e -p 'test_*.py' -v
       - name: Source startup smoke
         run: python src/main/app_qt.py --smoke-test "$env:RUNNER_TEMP/qserial-source-smoke"
       - name: Retain startup evidence

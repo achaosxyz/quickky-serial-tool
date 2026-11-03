@@ -7,9 +7,10 @@ from .work_tab_qt import WorkTab
 
 
 class WorkColumn(QWidget):
-    def __init__(self, config_manager, theme_manager=None, panel_type="main", on_column_activated=None, on_tab_data_sent=None, parent=None):
+    def __init__(self, config_manager, theme_manager=None, panel_type="main", on_column_activated=None, on_tab_data_sent=None, parent=None, port_provider=None):
         super().__init__(parent)
         self.config_manager, self.theme_manager, self.panel_type, self.on_column_activated, self.on_tab_data_sent, self.is_active = config_manager, theme_manager, panel_type, on_column_activated, on_tab_data_sent, False
+        self.port_provider = port_provider
         self.notebook = QTabWidget()
         self.notebook.tabBar().setObjectName("serialTabBar")
         self.notebook.setTabsClosable(False)
@@ -36,7 +37,7 @@ class WorkColumn(QWidget):
     def _add_new_tab(self, first=False):
         tab = WorkTab(self.config_manager, is_first_tab=first,
                       on_data_sent=self.on_tab_data_sent, panel_type=self.panel_type,
-                      parent=self)
+                      parent=self, port_provider=self.port_provider)
         if self.theme_manager is not None:
             tab.apply_theme(self.theme_manager, self.config_manager.get_font_size())
         tab.port_changed.connect(self._on_tab_port_changed)

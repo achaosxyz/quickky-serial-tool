@@ -38,11 +38,12 @@ class WorkTab(QWidget):
     MAX_DISPLAY_CHARS = 4 * 1024 * 1024
 
     def __init__(self, config_manager, is_first_tab=False,
-                 on_data_sent=None, panel_type="main", parent=None):
+                 on_data_sent=None, panel_type="main", parent=None, port_provider=None):
         super().__init__(parent)
         self.config_manager = config_manager
         self.on_data_sent = on_data_sent
         self.panel_type = panel_type
+        self.port_provider = port_provider
         self.is_first_tab = is_first_tab
         self.serial_manager = SerialManagerQt(); self.serial_manager.disconnected.connect(self._on_disconnected)
         self.serial_manager.operation_completed.connect(self._on_operation_completed)
@@ -50,6 +51,7 @@ class WorkTab(QWidget):
         self._theme_manager = None
         self.receive_pipeline = ReceivePipeline(); self._send_in_flight = False; self._pending_send = None; self._loop_send_cancelled = False; self._manual_close = False
         self.connection_state = ConnectionState.DISCONNECTED
+        self._reconnect_port = None
         self._cleaning_up = False
         self._cleanup_errors = None
         self.flush_timer = QTimer(self); self.flush_timer.timeout.connect(self._flush_receive)
@@ -63,7 +65,7 @@ class WorkTab(QWidget):
         self.flush_timer.start(self.FLUSH_INTERVAL_MS)
 
     def _build_ui(self):
-        self.serial_settings = SerialSettingsPanel(self.config_manager, self._serial_changed, self.panel_type, self)
+        self.serial_settings = SerialSettingsPanel(self.config_manager, self._serial_changed, self.panel_type, self, self.port_provider)
         self.receive_settings = ReceiveSettingsPanel(self.config_manager, self._receive_changed, self._choose_log_file, self)
         self.send_settings = SendSettingsPanel(self.config_manager, self._send_settings_changed, self._on_send_mode_changed, self)
         self.connect_btn = QPushButton(); self.connect_btn.clicked.connect(self._toggle_connection)
@@ -99,6 +101,10 @@ class WorkTab(QWidget):
 
     def _serial_changed(self, kind, value):
         if kind == "port":
+            if self.connection_state == ConnectionState.DISCONNECTED and self._reconnect_port and value != self._reconnect_port:
+                self.reconnect_timer.stop()
+                self._reconnect_port = None
+                self._manual_close = True
             self._reset_receive_session()
             self._close_log_writer()
             config = self.config_manager.get_port_config(value)
@@ -161,6 +167,8 @@ class WorkTab(QWidget):
         port = self.serial_settings.get_current_port()
         if not port: self._append_system(self.tr("[Error] Select a serial port first\n"), "error"); return
         self._manual_close = False
+        self._reconnect_port = port
+        self.reconnect_timer.stop()
         self._open_connection(port)
 
     def _open_connection(self, port):
@@ -172,6 +180,7 @@ class WorkTab(QWidget):
 
     def _close_connection(self):
         self._manual_close = True; self._stop_loop_send(); self.reconnect_timer.stop(); self._reset_receive_session()
+        self._reconnect_port = None
         if self.connection_state == ConnectionState.CLOSING:
             return
         self._apply_connection_state(ConnectionState.CLOSING)
@@ -214,7 +223,7 @@ class WorkTab(QWidget):
 
     def _try_reconnect(self):
         if self._manual_close or not self.receive_settings.get_settings()["auto_reconnect"] or self.connection_state != ConnectionState.DISCONNECTED: return
-        port = self.serial_settings.get_current_port()
+        port = self._reconnect_port
         if port:
             self._open_connection(port)
         else:
@@ -298,7 +307,10 @@ class WorkTab(QWidget):
         if operation == "open":
             if self.connection_state != ConnectionState.OPENING:
                 return
-            if success: self._apply_connection_state(ConnectionState.OPEN); self._append_system(self.tr("[Info] Port opened: {port}\n").format(port=self.serial_settings.get_current_port()), "success")
+            if success:
+                if self.serial_settings.get_current_port() != self._reconnect_port:
+                    self.serial_settings.set_current_port(self._reconnect_port, notify=False)
+                self._apply_connection_state(ConnectionState.OPEN); self._append_system(self.tr("[Info] Port opened: {port}\n").format(port=self.serial_settings.get_current_port()), "success")
             else:
                 state = ConnectionState.CLOSE_FAILED if self.serial_manager.has_port_ownership() else ConnectionState.DISCONNECTED
                 self._apply_connection_state(state)

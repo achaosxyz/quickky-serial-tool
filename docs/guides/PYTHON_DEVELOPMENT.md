@@ -61,9 +61,9 @@ Prefer several verified increments over a large, untestable rewrite. Architectur
 
 The refactored suite is separated into `tests/unit/`, `tests/component/`, and `tests/e2e/`:
 
-- Unit tests cover pure Python logic, fake serial ports, temporary files, and fault injection without Qt or physical resources.
+- Unit tests cover pure Python logic, focused serial boundary doubles, localhost TCP serial integration, temporary files, and fault injection without physical resources.
 - Component tests use `PySide6.QtTest.QTest` for mouse/keyboard input and `QSignalSpy` for signal assertions, with offscreen widgets and no physical serial ports.
-- E2E scenarios use QTest with the real application widgets and configured virtual/real serial loopback in the [E2E SOP](E2E_TESTING.md); they run separately from the default unit/component suites.
+- E2E scenarios use QTest with real application widgets and test-owned localhost TCP relay endpoints in the [E2E SOP](E2E_TESTING.md); they run as a separate suite and in CI.
 
 Run the fast suites independently:
 
@@ -71,9 +71,10 @@ Run the fast suites independently:
 python3 scripts/generate_translations.py
 python3 -m unittest discover -s tests/unit -v
 python3 -m unittest discover -s tests/component -v
+python3 -m unittest discover -s tests/e2e -p 'test_*.py' -v
 ```
 
-Use `QT_QPA_PLATFORM=offscreen` for component tests where required. Real serial hardware, virtual loopback links, clean-machine execution, and packaged GUI behavior require separate E2E or manual verification when available; never mark an unexecuted scenario as passed.
+Use `QT_QPA_PLATFORM=offscreen` for GUI tests where required. Real serial hardware, clean-machine execution, and packaged GUI behavior require separate verification when available; never mark an unexecuted scenario as passed.
 
 Every GUI-affecting change requires visual review in addition to functional assertions. Capture the affected widgets or windows with `QWidget.grab()`, inspect the actual PNG images, and check layout, clipping, spacing, contrast, readability, and relevant interaction/theme states. Creating a screenshot without inspecting it is not visual acceptance; if visual review cannot be performed, report it as not run.
 

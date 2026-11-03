@@ -7,12 +7,12 @@ from .work_column_qt import WorkColumn
 
 
 class WorkPanel(QWidget):
-    def __init__(self, config_manager, theme_manager, on_tab_data_sent=None, parent=None):
+    def __init__(self, config_manager, theme_manager, on_tab_data_sent=None, parent=None, port_provider=None):
         super().__init__(parent)
         self.config_manager, self.theme_manager, self.on_tab_data_sent, self.dual_panel_mode = config_manager, theme_manager, on_tab_data_sent, config_manager.get_dual_panel_mode()
         self.active_column = None
-        self.main_column = WorkColumn(config_manager, theme_manager, "main", self._activate, on_tab_data_sent, self)
-        self.secondary_column = WorkColumn(config_manager, theme_manager, "secondary", self._activate, on_tab_data_sent, self)
+        self.main_column = WorkColumn(config_manager, theme_manager, "main", self._activate, on_tab_data_sent, self, port_provider)
+        self.secondary_column = WorkColumn(config_manager, theme_manager, "secondary", self._activate, on_tab_data_sent, self, port_provider)
         self.active_column = self.main_column
         self.splitter = QSplitter(Qt.Horizontal)
         self.splitter.setChildrenCollapsible(False)

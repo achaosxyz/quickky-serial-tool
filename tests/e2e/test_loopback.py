@@ -111,10 +111,12 @@ class LoopbackTests(unittest.TestCase):
                 QTest.mouseClick(a.send_btn, Qt.LeftButton)
                 self.wait_for(lambda: b.rx_count >= before + 3, "Loop send did not repeat")
                 QTest.mouseClick(a.send_btn, Qt.LeftButton)
+                self.assertFalse(a.loop_timer.isActive(), "Loop timer did not stop")
                 self.wait_for(lambda: not a._send_in_flight, "Loop send did not settle")
-                QTest.qWait(150)
-                settled = b.rx_count
+                settled = a.tx_count
+                self.wait_for(lambda: b.rx_count == settled, "Sent bytes did not reach the receiver")
                 QTest.qWait(200)
+                self.assertEqual(a.tx_count, settled, "Loop send continued after cancellation")
                 self.assertEqual(b.rx_count, settled, "Loop send continued after cancellation")
 
                 log_path = Path(directory) / "receive.log"

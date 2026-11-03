@@ -1,0 +1,124 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Confirm the develop version to release, without -snapshot (for example 3.0.0)'
+        required: true
+        type: string
+      source:
+        description: 'Full develop commit SHA approved during release preparation'
+        required: true
+        type: string
+      notes:
+        description: 'Reviewed, user-visible release notes (Markdown)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qserial-release
+  cancel-in-progress: false
+
+env:
+  PYTHON: python
+  QT_QPA_PLATFORM: offscreen
+  QT_QPA_FONTDIR: C:/Windows/Fonts
+
+jobs:
+  verify:
+    name: Verify Windows release
+    runs-on: windows-2022
+    timeout-minutes: 30
+    outputs:
+      artifact: ${{ steps.artifact.outputs.artifact-id }}
+      version: ${{ steps.prepare.outputs.version }}
+      commit: ${{ steps.prepare.outputs.commit }}
+    steps:
+      - name: Require the main workflow
+        run: |
+          if ($env:GITHUB_REF -ne 'refs/heads/main') {
+            throw 'Run the release workflow from main; application source is taken from develop.'
+          }
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+          architecture: x64
+          cache: pip
+      - name: Prepare local candidate
+        id: prepare
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_NOTES: ${{ inputs.notes }}
+          RELEASE_SOURCE: ${{ inputs.source }}
+        run: python scripts/release.py prepare --directory "$env:RUNNER_TEMP/qserial-release"
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Generate translations
+        run: python scripts/generate_translations.py
+      - name: Unit tests
+        run: python -m unittest discover -s tests/unit -v
+      - name: Qt component tests
+        run: python -m unittest discover -s tests/component -v
+      - name: Build Windows package
+        shell: cmd
+        run: call .\build.bat
+      - name: Smoke-test the actual ZIP executable
+        env:
+          RELEASE_VERSION: ${{ steps.prepare.outputs.version }}
+        run: >-
+          python scripts/smoke_windows.py "dist/QSerial_v$env:RELEASE_VERSION.zip"
+          --version "$env:RELEASE_VERSION" --output "$env:RUNNER_TEMP/qserial-package-smoke"
+      - name: Export tested commit and ZIP
+        run: python scripts/release.py export --directory "$env:RUNNER_TEMP/qserial-release"
+      - uses: actions/upload-artifact@v7
+        id: artifact
+        with:
+          name: release-candidate-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/qserial-release/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+      - name: Retain packaged startup evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: package-smoke-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/qserial-package-smoke/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  publish:
+    name: Publish and advance develop
+    needs: verify
+    runs-on: windows-2022
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ needs.verify.outputs.artifact }}
+          path: ${{ runner.temp }}/qserial-release/
+      - name: Update main/tag and publish the verified ZIP
+        run: python scripts/release.py publish --directory "$env:RUNNER_TEMP/qserial-release"
+      - name: Advance develop after successful publication
+        run: python scripts/release.py finish --directory "$env:RUNNER_TEMP/qserial-release"

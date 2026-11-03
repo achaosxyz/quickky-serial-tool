@@ -77,18 +77,18 @@ class LoopbackTests(unittest.TestCase):
                 a.send_text.setPlainText("hello\n世界")
                 QTest.mouseClick(a.send_btn, Qt.LeftButton)
                 text_bytes = len("hello\r\n世界".encode("utf-8"))
-                self.wait_for(lambda: b.rx_count == text_bytes, "TEXT A to B failed")
+                self.wait_for(lambda: b.rx_count == text_bytes and a.tx_count == text_bytes,
+                              "TEXT A to B failed or send completion was not delivered")
                 self.assertIn("hello\n世界", b.receive_text.toPlainText())
-                self.assertEqual(a.tx_count, text_bytes)
 
                 column.notebook.setCurrentWidget(b)
                 QTest.mouseClick(b.send_settings.hex_radio, Qt.LeftButton)
                 QTest.mouseClick(a.receive_settings.hex_radio, Qt.LeftButton)
                 b.send_text.setPlainText("00 41 FF")
                 QTest.mouseClick(b.send_btn, Qt.LeftButton)
-                self.wait_for(lambda: a.rx_count == 3, "HEX B to A failed")
+                self.wait_for(lambda: a.rx_count == 3 and b.tx_count == 3,
+                              "HEX B to A failed or send completion was not delivered")
                 self.assertIn("00 41 FF", a.receive_text.toPlainText())
-                self.assertEqual(b.tx_count, 3)
 
                 # Re-send the last HEX history item through the selected tab.
                 history = window.command_panel.send_history_panel.table

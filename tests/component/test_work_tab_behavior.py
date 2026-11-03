@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 from PySide6.QtCore import QCoreApplication, QEvent, QTranslator
+from PySide6.QtTest import QSignalSpy
 from PySide6.QtWidgets import QApplication
 
 
@@ -36,11 +37,42 @@ class WorkTabBehaviorTests(unittest.TestCase):
         tab.log_writer = Mock(take_dropped_bytes=Mock(return_value=0), take_error_events=Mock(return_value=[]))
         tab._log_generation = 0
         tab.rx_count = 0
-        tab._update_counts = Mock()
+        tab._schedule_count_update = Mock()
         tab._append_text = Mock()
         WorkTab._flush_receive(tab)
         self.assertEqual(tab.rx_count, 7)
-        tab._update_counts.assert_called_once()
+        tab._schedule_count_update.assert_called_once()
+
+    def test_rx_label_is_coalesced_but_totals_reset_and_cleanup_are_immediate(self):
+        with tempfile.TemporaryDirectory() as directory, patch("utils.config_manager.get_base_path", return_value=directory):
+            tab = WorkTab(ConfigManager())
+            tab.flush_timer.stop()
+            tab.serial_manager.drain = Mock(return_value=(b"a", 0))
+            try:
+                initial = tab.count_label.text()
+                signal = QSignalSpy(tab.count_timer.timeout)
+                with patch.object(tab.count_timer, "start", wraps=tab.count_timer.start) as start:
+                    for _ in range(3):
+                        tab._flush_receive()
+                    start.assert_called_once()
+                self.assertEqual(tab.rx_count, 3)
+                self.assertEqual(tab.count_label.text(), initial)
+                self.assertTrue(signal.wait(500))
+                self.assertEqual(tab.count_label.text(), "RX: 3  TX: 0")
+                tab._flush_receive()
+                tab.tx_count = 5
+                tab._update_counts()
+                self.assertEqual(tab.count_label.text(), "RX: 4  TX: 5")
+                self.assertFalse(tab.count_timer.isActive())
+                tab._reset_counts()
+                self.assertEqual(tab.count_label.text(), "RX: 0  TX: 0")
+                tab._flush_receive()
+                self.assertTrue(tab.count_timer.isActive())
+                tab.cleanup()
+                self.assertFalse(tab.count_timer.isActive())
+            finally:
+                tab.cleanup()
+                tab.deleteLater()
 
     def test_close_failure_is_shown_to_user(self):
         tab = WorkTab.__new__(WorkTab)
@@ -136,6 +168,7 @@ class WorkTabBehaviorTests(unittest.TestCase):
         tab = WorkTab.__new__(WorkTab)
         tab._cleanup_errors = None
         tab.flush_timer = Mock()
+        tab.count_timer = Mock()
         tab.reconnect_timer = Mock()
         tab._stop_loop_send = Mock()
         tab._reset_receive_session = Mock()

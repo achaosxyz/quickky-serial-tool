@@ -71,6 +71,7 @@ Only one application can normally open a given Windows COM port at a time. Close
 | TEXT | Commands, terminal output, and human-readable protocols | Select UTF-8 or ASCII and the required CR, LF, or CRLF line ending. QSerial does not append an extra line ending. |
 | HEX | Binary protocols and byte-level inspection | Enter exact bytes such as `01 03 00 00 00 02`; whitespace, commas, hyphens, colons, and `0x` prefixes are accepted. |
 
+- **Long receive lines:** TEXT and HEX only split exceptionally long display lines (about 1,000 characters). Clipboard copies and saved logs retain the logical text without these display-only breaks. The receive line limit counts displayed segments.
 - **Loop send:** Repeats the current payload at the configured millisecond interval. Closing or losing the connection stops the loop.
 - **Quick commands:** Store reusable TEXT or HEX payloads in named groups and send them to the active session.
 - **Send history:** Successful sends are recorded for reuse; failed or empty sends are not recorded as successful history.

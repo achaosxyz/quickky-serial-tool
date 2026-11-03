@@ -32,8 +32,9 @@ class WorkTab(QWidget):
 
     port_changed = Signal(str)
 
-    FLUSH_INTERVAL_MS = 25
-    MAX_FLUSH_BYTES = 256 * 1024
+    FLUSH_INTERVAL_MS = 50
+    COUNT_INTERVAL_MS = 200
+    MAX_FLUSH_BYTES = 32 * 1024
     MAX_DISPLAY_CHARS = 4 * 1024 * 1024
 
     def __init__(self, config_manager, is_first_tab=False,
@@ -52,6 +53,10 @@ class WorkTab(QWidget):
         self._cleaning_up = False
         self._cleanup_errors = None
         self.flush_timer = QTimer(self); self.flush_timer.timeout.connect(self._flush_receive)
+        self.count_timer = QTimer(self)
+        self.count_timer.setSingleShot(True)
+        self.count_timer.setInterval(self.COUNT_INTERVAL_MS)
+        self.count_timer.timeout.connect(self._update_counts)
         self.loop_timer = QTimer(self); self.loop_timer.timeout.connect(lambda: self._send_data(from_timer=True))
         self.reconnect_timer = QTimer(self); self.reconnect_timer.setSingleShot(True); self.reconnect_timer.timeout.connect(self._try_reconnect)
         self._build_ui()
@@ -219,7 +224,7 @@ class WorkTab(QWidget):
         data, dropped = self.serial_manager.drain(self.MAX_FLUSH_BYTES)
         if dropped:
             self.rx_count += dropped
-            self._update_counts()
+            self._schedule_count_update()
             self._append_text(self.tr("[Warning] Receive buffer full; dropped {count} bytes\n").format(count=dropped), force=True, level="warning")
         log_dropped = self.log_writer.take_dropped_bytes()
         if log_dropped:
@@ -232,7 +237,7 @@ class WorkTab(QWidget):
         if not data:
             return
         self.rx_count += len(data)
-        self._update_counts()
+        self._schedule_count_update()
         settings = self.receive_settings.get_settings()
         self._append_text(self.receive_pipeline.process(data, settings), format_log=False)
 
@@ -336,7 +341,16 @@ class WorkTab(QWidget):
         self.log_file_path = filename; self._log_enabled = self.log_writer.open(filename, self._log_generation); self._append_system(self.tr("[Info] Log file: {filename}\n").format(filename=filename), "info"); return self._log_enabled
     def _clear_receive(self): self.receive_text.clear(); self.receive_pipeline.reset()
     def _reset_counts(self): self.rx_count = self.tx_count = 0; self._update_counts()
-    def _update_counts(self): self.count_label.setText(f"RX: {self.rx_count}  TX: {self.tx_count}")
+
+    def _schedule_count_update(self):
+        # Changing QLabel text invalidates the surrounding layout; coalesce RX paints.
+        if not self.count_timer.isActive():
+            self.count_timer.start()
+
+    def _update_counts(self):
+        self.count_timer.stop()
+        self.count_label.setText(f"RX: {self.rx_count}  TX: {self.tx_count}")
+
     def apply_theme(self, theme_manager, font_size=9):
         self._theme_manager = theme_manager
         self.receive_text.setFont(QFont("Consolas", font_size)); self.send_text.setFont(QFont("Consolas", font_size)); self.receive_text.apply_theme(theme_manager)
@@ -358,6 +372,7 @@ class WorkTab(QWidget):
         if self._cleanup_errors is not None:
             return list(self._cleanup_errors)
         self._cleaning_up = True
+        self.count_timer.stop()
         self.flush_timer.stop(); self._stop_loop_send(); self.reconnect_timer.stop(); self._reset_receive_session()
         self.serial_manager.dispose()
         result = self.serial_manager.wait_disposed(2.0)

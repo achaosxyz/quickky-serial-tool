@@ -75,3 +75,30 @@ Disconnect/reconnect and driver-failure scenarios require a separately controlla
 - Record functional and visual results separately as passed, failed, blocked, or not run, with exact endpoint roles and concrete failure evidence.
 - A passing functional assertion does not prove visual quality, and an unexecuted scenario or unreviewed screenshot must not be described as passed.
 - After a failure fix, rerun the affected scenario and perform an additional focused review of the fix before final acceptance.
+
+## 7. Receive Performance
+
+Use the configured pair and native Windows widgets to measure TEXT with natural newlines, continuous TEXT, and HEX separately:
+
+```powershell
+$env:QT_QPA_PLATFORM = 'windows'
+$output = Join-Path $env:TEMP 'qserial-receive-performance'
+foreach ($scenario in @('text-lines', 'text-long', 'hex')) {
+    python3 tests/e2e/measure_receive.py --scenario $scenario --kbps 30 --seconds 30 --output $output
+    if ($LASTEXITCODE -ne 0) { throw "Receive performance scenario failed: $scenario" }
+}
+```
+
+The rate is effective payload kilobits/second, excluding UART framing. A separate producer process paces 10 ms writes so GUI/GIL stalls do not throttle the input generator. The GUI runs its normal Qt event loop with a precise 20 ms heartbeat and periodic QTest clicking/typing. JSON reports separate receive/content/interaction correctness from heartbeat gaps, synchronous append/format durations, and GUI-process CPU time. Heartbeat gaps are responsiveness indicators, not measured frame times or input-to-paint latency. A correctness pass alone is not a smoothness pass.
+
+Configuration and logs are isolated in a temporary directory; screenshots and JSON persist in the selected output directory. Inspect the screenshots separately. Use `--log-mode` for timestamps, `--save-log` for file logging (or both), `--no-scroll` for a non-following view, and longer durations for sustained reception. File logs are compared with the formatted append stream after application cleanup; raw callback bytes are compared with the producer payload separately. Timestamp-mode content checks ignore intentional timestamp/newline formatting. Reports also measure receive enqueue/GUI flush/log enqueue costs, receive-thread CPU time and queue peaks; instrumentation itself adds some overhead. Missing/occupied endpoints are blockers, not mock substitutes.
+
+Keep endpoint roles, rate, duration, platform plugin, machine load, theme and build consistent for comparisons. `--block-chars` and `--flush-ms` override display limits/timing only in the test process for tuning. The application display limits still apply, so exact full-content checks require a payload that fits those limits. Compare separate runs rather than running GUI benchmarks concurrently. Do not interpret effective virtual-pair payload rates as proof of physical UART throughput at the selected baud rate.
+
+Use `--prefill-chars 4194304` to exercise reception against an already full display history without a multi-minute warm-up. This preloads display-only cached history before timed input, waits for initial painting, then checks the complete **new-input suffix**, raw input equality, display bounds and (when enabled) the new file-log stream. It does not assert preservation of evicted history.
+
+The runner waits for the final coalesced count-label update and checks it against live totals independently of the receive text. Count-label refresh targets 200 ms; the receive display targets 50 ms. Do not use label repaint frequency as the input byte rate or editor refresh rate.
+
+The runner uses a fixed 1200 × 720 logical-pixel primary-screen window and records start/end dimensions, DPI and tab count. It watches the selected receive tab while timing. Accept CPU/latency comparisons only when `performance_context_stable` is true and contexts match between runs; exit code 2 means functional checks passed but window/tab changes invalidated the performance context. `pass` checks integrity/interactions/cleanup, not a universal smoothness or frame-rate target. Shared-host load can still affect timings.
+
+HEX history preload rounds down to complete `XX ` tokens and records `prefill_inserted_chars`; requests shorter than three characters insert no history and use a full-content assertion. Timestamp-mode checks require an actual timestamp prefix as well as normalized content and, when enabled, exact flushed log text.

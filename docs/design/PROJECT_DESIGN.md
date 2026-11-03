@@ -70,7 +70,7 @@ See [Configuration](CONFIGURATION.md) for the complete current model and validat
 
 1. **Startup:** `app_qt.py` creates `QApplication` and `MainWindow`; the window loads configuration, applies the selected or system-derived language, constructs the workspace and command panel, applies the theme, and starts the event loop.
 2. **Serial session:** A tab submits bytes-only sends and lifecycle operations through the FIFO `SerialManagerQt` worker; background serial work returns explicit results through Qt signals while received bytes enter a bounded queue.
-3. **Receive display:** A 25 ms timer drains at most 256 KiB per batch, applies incremental decoding and formatting, updates RX statistics and logging, and appends to the bounded receive editor.
+3. **Receive display:** A 50 ms timer drains at most 32 KiB per batch, applies incremental decoding and formatting, updates RX statistics and logging, and appends to the bounded receive editor. Display-only continuation blocks bound pathological TEXT/HEX lines without changing copied or logged logical text.
 4. **Commands and history:** Quick commands and history target the active work tab; successful sends update history and refresh its table.
 5. **Persistence:** Configuration changes use normalized data and atomic replacement; high-frequency history writes are throttled and forced during window close.
 6. **Shutdown:** Workspace cleanup stops timers and serial activity, performs bounded log-writer shutdown, flushes configuration, and reports cleanup failures.

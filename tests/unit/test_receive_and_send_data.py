@@ -52,3 +52,20 @@ class ReceiveAndSendDataTests(unittest.TestCase):
     def test_prepare_returns_exact_wire_bytes(self):
         self.assertEqual(SendDataUtils.prepare("A\nB", "TEXT", "UTF-8", "CR"), b"A\rB")
         self.assertEqual(SendDataUtils.prepare("0x01 FF", "HEX", "UTF-8"), b"\x01\xff")
+
+    def test_hex_payload_has_no_artificial_newlines_across_batches(self):
+        settings = {"mode": "HEX", "encoding": "UTF-8", "log_mode": False}
+        data = bytes(range(256)) + b"\xff"
+        pipeline = ReceivePipeline()
+        output = "".join(pipeline.process(data[i:i + 7], settings) for i in range(0, len(data), 7))
+        self.assertNotIn("\n", output)
+        self.assertEqual(bytes.fromhex(output), data)
+        self.assertEqual(output, ReceivePipeline().process(data, settings))
+
+    def test_text_without_timestamps_does_not_call_clock_per_line(self):
+        from unittest.mock import patch
+
+        settings = {"mode": "TEXT", "encoding": "UTF-8", "log_mode": False}
+        with patch("utils.receive_data_utils.datetime") as clock:
+            self.assertEqual(ReceivePipeline().process(b"A\nB\nC", settings), "A\nB\nC")
+        clock.now.assert_not_called()

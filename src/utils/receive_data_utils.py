@@ -81,11 +81,13 @@ class ReceiveLogFormatter:
 
     def format(self, text, log_mode, now=None):
         """Format text for display and logging."""
-        now = now or datetime.now()
+        if not text:
+            return ""
         if not log_mode:
             self.last_line_ended = text.endswith("\n")
             self.last_timestamp_time = None
             return text
+        now = now or datetime.now()
         needs_timestamp = (
             self.last_line_ended
             or self.last_timestamp_time is None
@@ -134,6 +136,8 @@ class ReceivePipeline:
             self.segmenter.reset()
             return self.formatter.format(ReceiveDataUtils.format_hex(data), settings["log_mode"])
         text = self.decoder.decode(data, settings["encoding"])
+        if not settings["log_mode"]:
+            return self.formatter.format("".join(self.segmenter.iter_segments(text)), False)
         return "".join(self.formatter.format(part, settings["log_mode"])
                        for part in self.segmenter.iter_segments(text))
 

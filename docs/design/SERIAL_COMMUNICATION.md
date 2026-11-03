@@ -39,20 +39,20 @@ The loop sleeps briefly when no bytes are pending and performs periodic health c
 `SerialManagerQt` stores received chunks in a deque protected by a lock:
 
 - Maximum pending data: 4 MiB.
-- UI drain interval: 25 ms.
-- Maximum UI drain: 256 KiB per batch.
+- UI drain interval: 50 ms (20 Hz target), coalescing paints while leaving serial reads independent of GUI refreshes.
+- Maximum UI drain: 32 KiB per batch, limiting synchronous decode, insertion and logging work during input bursts. The nominal drain budget exceeds 4-Mbaud 8N1 payload traffic, but physical high-baud throughput still requires separate verification.
 - Overflow drops the incoming chunk, accumulates dropped-byte counts, and leaves already queued data intact.
 - Session reset clears pending and dropped state so old bytes are not displayed under a new port session.
 
-RX statistics include both displayed and dropped bytes. Oversized chunks are split across drains without reordering.
+RX statistics include both displayed and dropped bytes and are accumulated on every drain. The label is coalesced separately at a 200-ms target; TX completion and reset remain immediate. Oversized chunks are split across drains without reordering.
 
 ## 6. TEXT and HEX Reception
 
 TEXT reception uses incremental decoding so multibyte characters may cross drain boundaries. UTF-8 uses strict decoding; ASCII follows the existing GB2312/GBK fallback sequence. Valid whitespace is preserved, CRLF/CR are normalized for line processing, and only genuinely empty lines are filtered.
 
-`ReceivePipeline` owns the decoder, segmenter and shared formatter state. `ReceiveTextView` owns bounded document insertion, level colours and scrolling. WorkTab translates its controls on Qt language-change events without replacing user data.
+`ReceivePipeline` owns the decoder, segmenter and shared formatter state. Without timestamps, TEXT segments are joined before formatting and no clock is consulted. `ReceiveTextView` owns bounded document insertion, level colours and scrolling. Both TEXT and HEX use display-only continuation blocks for lines over 1,024 UTF-16 units; copying/exporting logical text removes those synthetic breaks, and the text returned for logging never contains them. WorkTab translates its controls on Qt language-change events without replacing user data.
 
-HEX reception formats bytes as uppercase, space-separated values and resets text decoder/segmenter state. The receive formatter also supports timestamped log mode; continuous data lasting more than 100 ms starts a new timestamped line.
+HEX reception formats bytes as uppercase, space-separated values and resets text decoder/segmenter state. There is no fixed byte-count row limit. The receive formatter also supports timestamped log mode; continuous data lasting more than 100 ms starts a new timestamped line.
 
 ## 7. Sending
 

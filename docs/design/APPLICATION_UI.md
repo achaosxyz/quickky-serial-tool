@@ -29,6 +29,7 @@ WorkPanel
 
 - `WorkPanel` owns dual-column visibility and tracks the active column.
 - `WorkColumn` creates, selects, closes, and enumerates tabs and propagates theme, suspension, and cleanup.
+- Every new tab receives the column's current theme and configured editor font before insertion, so receive character formats match existing tabs from the first received byte, including tabs created after a theme switch.
 - `WorkTab` emits port changes; its owning `WorkColumn` updates the tab title without the tab traversing its parent widgets.
 - The final real tab in a column cannot be closed; the dedicated plus page creates another tab.
 - Serial tabs use Qt-managed close buttons and `tabCloseRequested`; close controls are enabled only with multiple real tabs, and the plus page never has one. Native buttons are re-registered and explicitly shown after their hit-target size changes so dynamically inserted tabs immediately use the updated geometry without hiding their close controls. Close tooltips follow the application language.

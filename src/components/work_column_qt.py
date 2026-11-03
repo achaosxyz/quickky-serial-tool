@@ -37,6 +37,8 @@ class WorkColumn(QWidget):
         tab = WorkTab(self.config_manager, is_first_tab=first,
                       on_data_sent=self.on_tab_data_sent, panel_type=self.panel_type,
                       parent=self)
+        if self.theme_manager is not None:
+            tab.apply_theme(self.theme_manager, self.config_manager.get_font_size())
         tab.port_changed.connect(self._on_tab_port_changed)
         self._watch_activation(tab)
         index = self.notebook.insertTab(self.notebook.indexOf(self._add_tab_page), tab, self.tr("New tab"))

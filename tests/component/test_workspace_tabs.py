@@ -10,7 +10,7 @@ from unittest.mock import patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
-from PySide6.QtGui import QEnterEvent
+from PySide6.QtGui import QColor, QEnterEvent
 from PySide6.QtTest import QSignalSpy, QTest
 from PySide6.QtWidgets import QApplication, QStyle, QStyleOptionTab, QTabBar, QToolButton
 
@@ -63,6 +63,33 @@ class WorkspaceTabTests(unittest.TestCase):
         index = notebook.indexOf(self.column._add_tab_page)
         self.assertEqual(index, notebook.count() - 1)
         self.assertIsNone(self.close_button(index))
+
+    def test_new_tabs_immediately_use_current_receive_text_colors(self):
+        first = self.column.get_current_tab()
+        first.receive_text.append_text("Original data\n", auto_scroll=False)
+        first.receive_text.append_text("Original status\n", "info", auto_scroll=False)
+        original_text = first.receive_text.toPlainText()
+        bar = self.column.notebook.tabBar()
+        for theme in ("dark", "light", "dark"):
+            self.theme.load_theme(theme)
+            self.column.setStyleSheet(self.theme.stylesheet())
+            self.column.apply_theme(self.theme)
+            QTest.mouseClick(bar, Qt.LeftButton, pos=bar.tabRect(self.column.notebook.count() - 1).center())
+            added = self.column.get_current_tab()
+            self.assertIsNot(added, first)
+            added.receive_text.append_text("New data 00 41 FF\n", auto_scroll=False)
+            added.receive_text.append_text("New status\n", "info", auto_scroll=False)
+            for tab in (first, added):
+                with self.subTest(theme=theme, new_tab=tab is added):
+                    block = tab.receive_text.document().firstBlock()
+                    for color_key in ("text_fg", "log_info_color"):
+                        fragment = block.begin().fragment()
+                        self.assertEqual(
+                            fragment.charFormat().foreground().color(),
+                            QColor(self.theme.get_theme_colors()[color_key]),
+                        )
+                        block = block.next()
+            self.assertEqual(first.receive_text.toPlainText(), original_text)
 
     def test_native_close_controls_survive_repeated_add_close_cycles(self):
         notebook = self.column.notebook
